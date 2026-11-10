@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://mp3tageditor-7zg.pages.dev/sitemap.xml

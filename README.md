@@ -13,7 +13,7 @@ Edita metadatos y carátulas por lotes con privacidad total: los archivos **nunc
 - Exportación individual o en ZIP
 - Reproductor de audio integrado
 - Tema claro / oscuro
-- Sin servidores, sin claves API, sin telemetría
+- Sin servidores ni claves API: los archivos MP3 nunca se suben (solo métricas de uso anónimas de la web)
 
 ## Ejecutar localmente
 
@@ -61,3 +61,7 @@ No existe backend, no se envían archivos a ningún servidor y no se requieren c
 ## Licencia
 
 MIT
+
+### Cabeceras de seguridad
+
+`public/_headers` define (Cloudflare Pages) una Content-Security-Policy estricta, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` y `Permissions-Policy`. Si añades nuevos scripts o dominios externos, actualiza la CSP en ese archivo.

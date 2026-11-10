@@ -1,6 +1,24 @@
 import JSZip from 'jszip';
 import type { MP3FileItem } from '../types/mp3';
 import { writeID3Tags, stripAllID3Tags, isTagsEmpty } from './id3';
+import { sanitizeFilename } from './formatters';
+
+/**
+ * Devuelve un nombre seguro y único dentro del ZIP (evita sobrescrituras por duplicados)
+ */
+function uniqueZipName(rawName: string, used: Set<string>): string {
+  const safe = sanitizeFilename(rawName) || 'pista.mp3';
+  const dot = safe.lastIndexOf('.');
+  const base = dot > 0 ? safe.slice(0, dot) : safe;
+  const ext = dot > 0 ? safe.slice(dot) : '';
+  let candidate = safe;
+  let n = 1;
+  while (used.has(candidate.toLowerCase())) {
+    candidate = `${base} (${n++})${ext}`;
+  }
+  used.add(candidate.toLowerCase());
+  return candidate;
+}
 
 /**
  * Downloads a single Blob with the specified filename in the browser
@@ -36,12 +54,15 @@ export async function exportFilesToZip(
 ): Promise<void> {
   const zip = new JSZip();
   const total = items.length;
+  const usedNames = new Set<string>();
 
   for (let i = 0; i < total; i++) {
     const item = items[i];
     if (onProgress) {
       onProgress(i + 1, total, item.currentFileName);
     }
+
+    const zipName = uniqueZipName(item.currentFileName, usedNames);
 
     try {
       const buffer = await item.file.arrayBuffer();
@@ -50,11 +71,11 @@ export async function exportFilesToZip(
         ? stripAllID3Tags(buffer)
         : await writeID3Tags(buffer, item.tags);
       const taggedBuffer = await blob.arrayBuffer();
-      zip.file(item.currentFileName, taggedBuffer);
+      zip.file(zipName, taggedBuffer);
     } catch {
       // Fallback: add original file buffer if tagging fails
       const fallbackBuffer = await item.file.arrayBuffer();
-      zip.file(item.currentFileName, fallbackBuffer);
+      zip.file(zipName, fallbackBuffer);
     }
   }
 

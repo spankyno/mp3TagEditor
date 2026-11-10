@@ -24,8 +24,13 @@ export function formatDuration(seconds: number): string {
  * Sanitizes filename to prevent illegal filesystem characters across OSes
  */
 export function sanitizeFilename(name: string): string {
-  return name
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+  const clean = name
+    .replace(/[<>:"/\\|?*\x00-\x1F\x7F]/g, '_')
     .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/^[.\s]+/, '') // sin puntos iniciales (evita "..", archivos ocultos)
+    .replace(/[.\s]+$/, '') // Windows no admite puntos/espacios finales
+    .trim()
+    .slice(0, 200);
+  // Nombres reservados de Windows (CON, NUL, COM1...)
+  return /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/i.test(clean) ? `_${clean}` : clean;
 }

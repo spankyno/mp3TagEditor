@@ -4,6 +4,16 @@ import type { MP3FileItem, MP3Picture, MP3Tags, CleanTagsOptions } from '../type
 import { sanitizeFilename } from './formatters';
 
 /**
+ * El MIME de una carátula embebida es un dato no confiable: solo se admiten formatos de imagen conocidos.
+ */
+const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+export function safeImageMime(mime: unknown): string {
+  const m = typeof mime === 'string' ? mime.toLowerCase().trim() : '';
+  if (m === 'image/jpg') return 'image/jpeg';
+  return ALLOWED_IMAGE_MIMES.has(m) ? m : 'image/jpeg';
+}
+
+/**
  * Creates empty MP3 tags object
  */
 export function createEmptyTags(fallbackTitle = ''): MP3Tags {
@@ -142,7 +152,16 @@ export function createPictureFromBytes(data: Uint8Array, mimeType: string): Prom
  * Converts an uploaded image File into an MP3Picture suitable for ID3 APIC frame
  * Always normalizes to JPEG if not already a clean JPEG or PNG
  */
+const MAX_COVER_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_COVER_PIXELS = 50_000_000; // evita canvas gigantes
+
 export async function convertImageFileToPicture(file: File): Promise<MP3Picture> {
+  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+    throw new Error('Formato de imagen no admitido (usa JPG, PNG, WebP o GIF)');
+  }
+  if (file.size > MAX_COVER_BYTES) {
+    throw new Error('La imagen supera el límite de 10 MB');
+  }
   // If already standard JPEG or PNG, read directly
   if (file.type === 'image/jpeg' || file.type === 'image/png') {
     const buffer = await file.arrayBuffer();
@@ -155,6 +174,10 @@ export async function convertImageFileToPicture(file: File): Promise<MP3Picture>
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
+        if (img.naturalWidth * img.naturalHeight > MAX_COVER_PIXELS) {
+          reject(new Error('La imagen tiene una resolución demasiado grande'));
+          return;
+        }
         const canvas = document.createElement('canvas');
         canvas.width = img.naturalWidth;
         canvas.height = img.naturalHeight;
@@ -208,7 +231,7 @@ export async function readMP3File(file: File): Promise<MP3FileItem> {
         if (t.picture && t.picture.data && t.picture.data.length > 0) {
           try {
             const byteArray = new Uint8Array(t.picture.data);
-            const mime = t.picture.format || 'image/jpeg';
+            const mime = safeImageMime(t.picture.format);
             picture = await createPictureFromBytes(byteArray, mime);
           } catch {
             picture = null;

@@ -38,12 +38,21 @@ import { CleanTagsModal } from './components/CleanTagsModal';
 import { AboutView } from './components/AboutView';
 import { ToastContainer, type ToastMessage } from './components/Toast';
 
+// Límites para evitar agotar la memoria del navegador (DoS local)
+const MAX_FILES_PER_SESSION = 200;
+const MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024; // 100 MB por archivo
+
 export default function App() {
   // Theme state
   const [isDark, setIsDark] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('theme');
-      if (saved) return saved === 'dark';
+      let saved: string | null = null;
+      try {
+        saved = localStorage.getItem('theme');
+      } catch {
+        /* almacenamiento bloqueado (modo privado, políticas del navegador) */
+      }
+      if (saved === 'dark' || saved === 'light') return saved === 'dark';
       return window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     return false;
@@ -81,12 +90,11 @@ export default function App() {
 
   // Apply dark class to documentElement
   useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+    document.documentElement.classList.toggle('dark', isDark);
+    try {
+      localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    } catch {
+      /* ignorar si el almacenamiento no está disponible */
     }
   }, [isDark]);
 
@@ -106,12 +114,29 @@ export default function App() {
 
   // Load files from FileList or drop
   const handleFilesSelected = async (fileList: FileList | File[]) => {
-    const rawFiles = Array.from(fileList).filter(
+    const mp3Files = Array.from(fileList).filter(
       (f) =>
         f.name.toLowerCase().endsWith('.mp3') ||
         f.type === 'audio/mpeg' ||
         f.type === 'audio/mp3'
     );
+
+    const sizeOk = mp3Files.filter((f) => f.size > 0 && f.size <= MAX_FILE_SIZE_BYTES);
+    const availableSlots = Math.max(0, MAX_FILES_PER_SESSION - files.length);
+    const rawFiles = sizeOk.slice(0, availableSlots);
+    const skipped = mp3Files.length - rawFiles.length;
+
+    if (mp3Files.length > 0 && skipped > 0) {
+      addToast(
+        'info',
+        `${skipped} archivo${skipped === 1 ? '' : 's'} omitido${skipped === 1 ? '' : 's'}`,
+        `Límites: máx. ${MAX_FILES_PER_SESSION} pistas por sesión y ${MAX_FILE_SIZE_BYTES / (1024 * 1024)} MB por archivo.`
+      );
+    }
+
+    if (rawFiles.length === 0 && mp3Files.length > 0) {
+      return;
+    }
 
     if (rawFiles.length === 0) {
       addToast(

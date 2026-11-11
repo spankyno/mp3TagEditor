@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, Sparkles, Wand2, Check } from 'lucide-react';
+import { Modal } from './Modal';
+import { useI18n } from '../i18n';
 import type { MP3FileItem, MP3Tags } from '../types/mp3';
 import { autoTagFromFilename } from '../utils/id3';
 
@@ -26,6 +28,7 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
   selectedIds,
   onApplyAutoTags,
 }) => {
+  const { t } = useI18n();
   const [pattern, setPattern] = useState('%track% - %artist% - %title%');
   const [applyOnlyToSelected, setApplyOnlyToSelected] = useState(selectedIds.size > 0);
 
@@ -62,28 +65,30 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <Modal isOpen={isOpen} onClose={onClose} labelledBy="autotag-title" className="w-full max-w-3xl">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg">
-              <Wand2 className="w-5 h-5" />
+              <Wand2 aria-hidden="true" className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Auto-rellenar etiquetas desde el nombre de archivo
-              </h3>
+              <h2 id="autotag-title" className="text-base font-bold text-slate-900 dark:text-white">
+                {t('auto.auto_rellenar_etiquetas_desde_el')}
+              </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Extrae pista, artista y título automáticamente analizando los nombres de los MP3.
+                {t('auto.extrae_pista_artista_y_titulo')}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label={t('modal.close')}
+            className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X aria-hidden="true" className="w-5 h-5" />
           </button>
         </div>
 
@@ -92,7 +97,7 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
           {/* Pattern Presets */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Patrones predefinidos:
+              {t('auto.patrones_predefinidos')}
             </label>
             <div className="flex flex-wrap gap-2">
               {PRESET_PATTERNS.map((p) => (
@@ -114,19 +119,21 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
 
           {/* Custom Pattern Input */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Plantilla personalizada:
+            <label htmlFor="autotag-pattern" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              {t('auto.plantilla_personalizada')}
             </label>
             <input
               type="text"
+              id="autotag-pattern"
+              data-autofocus
               value={pattern}
               onChange={(e) => setPattern(e.target.value)}
               placeholder="%track% - %artist% - %title%"
               className="w-full px-3.5 py-2 text-xs font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             />
-            <div className="mt-1.5 flex flex-wrap gap-1 text-[11px] text-slate-400">
-              <span>Etiquetas disponibles:</span>
-              <code className="text-indigo-600 dark:text-indigo-400">%track%</code>
+            <div className="mt-1.5 flex flex-wrap gap-1 text-[11px] text-slate-600 dark:text-slate-400">
+              <span>{t('auto.etiquetas_disponibles')}</span>
+              <code className="text-indigo-700 dark:text-indigo-400">%track%</code>
               <code className="text-indigo-600 dark:text-indigo-400">%artist%</code>
               <code className="text-indigo-600 dark:text-indigo-400">%title%</code>
               <code className="text-indigo-600 dark:text-indigo-400">%album%</code>
@@ -145,7 +152,7 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
                 className="w-4 h-4 text-indigo-600 rounded border-slate-300 dark:border-slate-700 focus:ring-indigo-500"
               />
               <label htmlFor="apply-selected-only">
-                Aplicar solo a las {selectedIds.size} pistas actualmente seleccionadas (de {files.length} totales)
+                {t('auto.onlySelected', { n: selectedIds.size, total: files.length })}
               </label>
             </div>
           )}
@@ -153,16 +160,16 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
           {/* Live Preview Table */}
           <div>
             <span className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Vista previa en tiempo real ({previewData.length} archivos):
+              {t('auto.preview', { n: previewData.length })}
             </span>
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden max-h-56 overflow-y-auto text-xs">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
                   <tr>
-                    <th className="py-2 px-3">Nombre de archivo</th>
-                    <th className="py-2 px-3">Pista</th>
-                    <th className="py-2 px-3">Artista</th>
-                    <th className="py-2 px-3">Título</th>
+                    <th scope="col" className="py-2 px-3">{t('auto.nombre_de_archivo')}</th>
+                    <th scope="col" className="py-2 px-3">{t('auto.pista')}</th>
+                    <th scope="col" className="py-2 px-3">{t('auto.artista')}</th>
+                    <th scope="col" className="py-2 px-3">{t('auto.titulo')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono text-[11px]">
@@ -174,7 +181,7 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
                       <td className="py-1.5 px-3 text-indigo-600 dark:text-indigo-400">
                         {row.extracted.track || '—'}
                       </td>
-                      <td className="py-1.5 px-3 text-emerald-600 dark:text-emerald-400">
+                      <td className="py-1.5 px-3 text-emerald-700 dark:text-emerald-400">
                         {row.extracted.artist || '—'}
                       </td>
                       <td className="py-1.5 px-3 text-slate-900 dark:text-white font-sans">
@@ -185,8 +192,8 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
                 </tbody>
               </table>
               {previewData.length > 8 && (
-                <div className="p-2 text-center text-[11px] text-slate-400 bg-slate-50/50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800">
-                  ... y {previewData.length - 8} pistas más
+                <div className="p-2 text-center text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800">
+                  {t('auto.more', { n: previewData.length - 8 })}
                 </div>
               )}
             </div>
@@ -200,18 +207,18 @@ export const AutoTagModal: React.FC<AutoTagModalProps> = ({
             onClick={onClose}
             className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
           >
-            Cancelar
+            {t('auto.cancelar')}
           </button>
           <button
             type="button"
             onClick={handleApply}
             className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all active:scale-95 inline-flex items-center gap-1.5"
           >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Aplicar a {targetFiles.length} pistas</span>
+            <Sparkles aria-hidden="true" className="w-3.5 h-3.5" />
+            <span>{t('auto.apply', { n: targetFiles.length })}</span>
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

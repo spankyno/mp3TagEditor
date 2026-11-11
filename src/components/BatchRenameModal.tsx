@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { X, FileText, ArrowRight, Check } from 'lucide-react';
+import { Modal } from './Modal';
+import { useI18n } from '../i18n';
 import type { MP3FileItem } from '../types/mp3';
 import { renameFromTags } from '../utils/id3';
 
@@ -25,6 +27,7 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
   selectedIds,
   onApplyRenaming,
 }) => {
+  const { t } = useI18n();
   const [template, setTemplate] = useState('%track% - %artist% - %title%');
   const [applyOnlyToSelected, setApplyOnlyToSelected] = useState(selectedIds.size > 0);
 
@@ -63,28 +66,30 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+    <Modal isOpen={isOpen} onClose={onClose} labelledBy="rename-title" className="w-full max-w-3xl">
       <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg">
-              <FileText className="w-5 h-5" />
+              <FileText aria-hidden="true" className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                Renombrar archivos a partir de etiquetas ID3
-              </h3>
+              <h2 id="rename-title" className="text-base font-bold text-slate-900 dark:text-white">
+                {t('rename.renombrar_archivos_a_partir_de')}
+              </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Organiza y estandariza los nombres de archivo MP3 usando sus metadatos.
+                {t('rename.organiza_y_estandariza_los_nombres')}
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label={t('modal.close')}
+            className="p-2 rounded-lg text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            <X className="w-5 h-5" />
+            <X aria-hidden="true" className="w-5 h-5" />
           </button>
         </div>
 
@@ -93,7 +98,7 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
           {/* Preset Buttons */}
           <div>
             <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Plantillas estándar:
+              {t('rename.plantillas_estandar')}
             </label>
             <div className="flex flex-wrap gap-2">
               {RENAME_PRESETS.map((p) => (
@@ -115,18 +120,20 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
 
           {/* Custom Template Input */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
-              Patrón de renombrado:
+            <label htmlFor="rename-template" className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              {t('rename.patron_de_renombrado')}
             </label>
             <input
               type="text"
+              id="rename-template"
+              data-autofocus
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
               placeholder="%track% - %artist% - %title%"
               className="w-full px-3.5 py-2 text-xs font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
             />
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-              <span>Insertar etiqueta:</span>
+              <span>{t('rename.insertar_etiqueta')}</span>
               {['%track%', '%artist%', '%title%', '%album%', '%year%', '%genre%'].map((tok) => (
                 <button
                   key={tok}
@@ -151,7 +158,7 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
                 className="w-4 h-4 text-indigo-600 rounded border-slate-300 dark:border-slate-700 focus:ring-indigo-500"
               />
               <label htmlFor="rename-selected-only">
-                Renombrar solo las {selectedIds.size} pistas seleccionadas (de {files.length} totales)
+                {t('rename.onlySelected', { n: selectedIds.size, total: files.length })}
               </label>
             </div>
           )}
@@ -159,25 +166,25 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
           {/* Live Preview List */}
           <div>
             <span className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
-              Comparación antes / después ({previewData.length} archivos):
+              {t('rename.preview', { n: previewData.length })}
             </span>
             <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden max-h-56 overflow-y-auto text-xs">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
                   <tr>
-                    <th className="py-2 px-3">Nombre original</th>
-                    <th className="py-2 px-2 w-8 text-center"></th>
-                    <th className="py-2 px-3">Nuevo nombre propuesto</th>
+                    <th scope="col" className="py-2 px-3">{t('rename.nombre_original')}</th>
+                    <th scope="col" className="py-2 px-2 w-8 text-center"><span className="sr-only">{t('rename.cambio_de_nombre')}</span></th>
+                    <th scope="col" className="py-2 px-3">{t('rename.nuevo_nombre_propuesto')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-mono text-[11px]">
                   {previewData.slice(0, 8).map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                      <td className="py-2 px-3 truncate max-w-[240px] text-slate-500 line-through opacity-70">
+                      <td className="py-2 px-3 truncate max-w-[240px] text-slate-600 dark:text-slate-400 line-through">
                         {row.oldName}
                       </td>
-                      <td className="py-2 px-2 text-center text-slate-400">
-                        <ArrowRight className="w-3.5 h-3.5 mx-auto text-indigo-500" />
+                      <td className="py-2 px-2 text-center text-slate-500">
+                        <ArrowRight aria-hidden="true" className="w-3.5 h-3.5 mx-auto text-indigo-500" />
                       </td>
                       <td className="py-2 px-3 truncate max-w-[280px] font-semibold text-indigo-600 dark:text-indigo-400">
                         {row.newName}
@@ -187,8 +194,8 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
                 </tbody>
               </table>
               {previewData.length > 8 && (
-                <div className="p-2 text-center text-[11px] text-slate-400 bg-slate-50/50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800">
-                  ... y {previewData.length - 8} archivos más
+                <div className="p-2 text-center text-[11px] text-slate-600 dark:text-slate-400 bg-slate-50/50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800">
+                  {t('rename.more', { n: previewData.length - 8 })}
                 </div>
               )}
             </div>
@@ -202,18 +209,18 @@ export const BatchRenameModal: React.FC<BatchRenameModalProps> = ({
             onClick={onClose}
             className="px-4 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
           >
-            Cancelar
+            {t('auto.cancelar')}
           </button>
           <button
             type="button"
             onClick={handleApply}
             className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all active:scale-95 inline-flex items-center gap-1.5"
           >
-            <Check className="w-3.5 h-3.5" />
-            <span>Aplicar nuevo nombre a {targetFiles.length} pistas</span>
+            <Check aria-hidden="true" className="w-3.5 h-3.5" />
+            <span>{t('rename.apply', { n: targetFiles.length })}</span>
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };

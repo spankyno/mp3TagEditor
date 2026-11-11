@@ -1,5 +1,4 @@
-import JSZip from 'jszip';
-import type { MP3FileItem } from '../types/mp3';
+import type { MP3FileItem, ID3Version } from '../types/mp3';
 import { writeID3Tags, stripAllID3Tags, isTagsEmpty } from './id3';
 import { sanitizeFilename } from './formatters';
 
@@ -37,11 +36,14 @@ export function downloadBlob(blob: Blob, filename: string): void {
 /**
  * Saves a single MP3 file with all its current tags and current filename
  */
-export async function saveAndDownloadSingleFile(item: MP3FileItem): Promise<void> {
+export async function saveAndDownloadSingleFile(
+  item: MP3FileItem,
+  version: ID3Version = '2.3'
+): Promise<void> {
   const buffer = await item.file.arrayBuffer();
   const taggedBlob = isTagsEmpty(item.tags)
     ? stripAllID3Tags(buffer)
-    : await writeID3Tags(buffer, item.tags);
+    : await writeID3Tags(buffer, item.tags, version);
   downloadBlob(taggedBlob, item.currentFileName);
 }
 
@@ -50,8 +52,11 @@ export async function saveAndDownloadSingleFile(item: MP3FileItem): Promise<void
  */
 export async function exportFilesToZip(
   items: MP3FileItem[],
+  version: ID3Version,
   onProgress?: (current: number, total: number, currentName: string) => void
 ): Promise<void> {
+  // JSZip se carga bajo demanda: solo pesa cuando el usuario exporta un ZIP
+  const { default: JSZip } = await import('jszip');
   const zip = new JSZip();
   const total = items.length;
   const usedNames = new Set<string>();
@@ -69,7 +74,7 @@ export async function exportFilesToZip(
       // Generate updated ID3 buffer or strip if empty
       const blob = isTagsEmpty(item.tags)
         ? stripAllID3Tags(buffer)
-        : await writeID3Tags(buffer, item.tags);
+        : await writeID3Tags(buffer, item.tags, version);
       const taggedBuffer = await blob.arrayBuffer();
       zip.file(zipName, taggedBuffer);
     } catch {
@@ -88,7 +93,7 @@ export async function exportFilesToZip(
     },
     (metadata) => {
       if (onProgress && metadata.percent === 100) {
-        onProgress(total, total, 'Finalizando archivo ZIP...');
+        onProgress(total, total, ''); // nombre vacío = fase final (la interfaz muestra el texto traducido)
       }
     }
   );

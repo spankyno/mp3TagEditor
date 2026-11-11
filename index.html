@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
+    <!-- Tema claro/oscuro antes del primer pintado (evita parpadeo) -->
+    <script src="/theme-init.js"></script>
+
     <!-- Verificación de propiedad (Google Search Console) -->
     <meta name="google-site-verification" content="fK2gZcSYwHHPqDFWdIB5WD1eVONqa6kwIFqkRDRyX4g" />
 
@@ -16,9 +19,15 @@
     <link rel="canonical" href="https://mp3tageditor-7zg.pages.dev/" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
+    <!-- Versiones por idioma -->
+    <link rel="alternate" hreflang="es" href="https://mp3tageditor-7zg.pages.dev/" />
+    <link rel="alternate" hreflang="en" href="https://mp3tageditor-7zg.pages.dev/en/" />
+    <link rel="alternate" hreflang="x-default" href="https://mp3tageditor-7zg.pages.dev/" />
+
     <!-- Open Graph -->
     <meta property="og:site_name" content="Editor Etiquetas MP3 Online" />
     <meta property="og:locale" content="es_ES" />
+    <meta property="og:locale:alternate" content="en_US" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://mp3tageditor-7zg.pages.dev/" />
     <meta property="og:title" content="Editor Etiquetas MP3 Online - Editor ID3 100% en el Navegador" />
@@ -59,11 +68,21 @@
             "price": "0",
             "priceCurrency": "EUR"
           },
-          "author": { "@id": "https://aitorsanchez.pages.dev/#person" },
-          "creator": { "@id": "https://aitorsanchez.pages.dev/#person" },
-          "publisher": { "@id": "https://aitorsanchez.pages.dev/#person" },
-          "isPartOf": { "@id": "https://mp3tageditor-7zg.pages.dev/#website" },
-          "mainEntityOfPage": { "@id": "https://mp3tageditor-7zg.pages.dev/#webpage" }
+          "author": {
+            "@id": "https://aitorsanchez.pages.dev/#person"
+          },
+          "creator": {
+            "@id": "https://aitorsanchez.pages.dev/#person"
+          },
+          "publisher": {
+            "@id": "https://aitorsanchez.pages.dev/#person"
+          },
+          "isPartOf": {
+            "@id": "https://mp3tageditor-7zg.pages.dev/#website"
+          },
+          "mainEntityOfPage": {
+            "@id": "https://mp3tageditor-7zg.pages.dev/#webpage"
+          }
         },
         {
           "@type": "WebSite",
@@ -71,7 +90,9 @@
           "name": "Editor Etiquetas MP3 Online",
           "url": "https://mp3tageditor-7zg.pages.dev/",
           "inLanguage": "es",
-          "publisher": { "@id": "https://aitorsanchez.pages.dev/#person" }
+          "publisher": {
+            "@id": "https://aitorsanchez.pages.dev/#person"
+          }
         },
         {
           "@type": "WebPage",
@@ -79,14 +100,18 @@
           "url": "https://mp3tageditor-7zg.pages.dev/",
           "name": "Editor Etiquetas MP3 Online - Editor ID3 100% en el Navegador",
           "inLanguage": "es",
-          "isPartOf": { "@id": "https://mp3tageditor-7zg.pages.dev/#website" },
+          "isPartOf": {
+            "@id": "https://mp3tageditor-7zg.pages.dev/#website"
+          },
           "primaryImageOfPage": {
             "@type": "ImageObject",
             "url": "https://mp3tageditor-7zg.pages.dev/og-image.png",
             "width": 1200,
             "height": 630
           },
-          "author": { "@id": "https://aitorsanchez.pages.dev/#person" }
+          "author": {
+            "@id": "https://aitorsanchez.pages.dev/#person"
+          }
         },
         {
           "@type": "Person",
@@ -102,20 +127,29 @@
             "@type": "ContactPoint",
             "contactType": "customer support",
             "url": "https://aitorsanchez.pages.dev/contacto",
-            "availableLanguage": ["es"]
+            "availableLanguage": [
+              "es",
+              "en"
+            ]
           },
-          "owns": { "@id": "https://aitorhub.vercel.app/#website" }
+          "owns": {
+            "@id": "https://aitorhub.vercel.app/#website"
+          }
         },
         {
           "@type": "WebSite",
           "@id": "https://aitorhub.vercel.app/#website",
           "name": "Aitor Hub",
           "url": "https://aitorhub.vercel.app",
-          "creator": { "@id": "https://aitorsanchez.pages.dev/#person" }
+          "creator": {
+            "@id": "https://aitorsanchez.pages.dev/#person"
+          }
         }
       ]
     }
     </script>
+    <!-- FAQPage (generado desde src/i18n/seo.ts durante el build) -->
+    <script type="application/ld+json">__FAQ_JSONLD__</script>
 
     <!-- Seguimiento (dashboard) -->
     <script src="https://aitors-hub-dashboard.asanchezgu.workers.dev/tracker.js"
@@ -123,25 +157,9 @@
             data-key="ak_eb9ee2b84c9044ab8e8991b0a15e5ee5"
             async>
     </script>
-
-    <!-- Fuentes -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   </head>
   <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans antialiased min-h-screen">
-    <div id="root"></div>
-    <noscript>
-      <main style="max-width:40rem;margin:4rem auto;padding:1rem;font-family:sans-serif">
-        <h1>Editor Etiquetas MP3 Online</h1>
-        <p>Editor ID3 de archivos MP3 100% en el navegador: edita metadatos y carátulas por lotes con privacidad total. Necesitas activar JavaScript para usar esta aplicación.</p>
-        <p>
-          Creado por <a href="https://aitorsanchez.pages.dev" rel="noopener noreferrer">Aitor Sánchez Gutiérrez</a> ·
-          <a href="https://aitorhub.vercel.app" rel="noopener noreferrer">Aitor Hub</a> ·
-          <a href="https://aitorsanchez.pages.dev/contacto" rel="noopener noreferrer">Contacto</a>
-        </p>
-      </main>
-    </noscript>
+    <div id="root"><!--app-html--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

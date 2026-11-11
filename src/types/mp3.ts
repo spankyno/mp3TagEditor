@@ -22,6 +22,9 @@ export interface MP3Tags {
   picture?: MP3Picture | null;
 }
 
+/** Versión de la etiqueta ID3v2 que se escribe al guardar */
+export type ID3Version = '2.3' | '2.4';
+
 export type FileStatus = 'loaded' | 'modified' | 'processing' | 'saved' | 'error';
 
 export interface MP3FileItem {

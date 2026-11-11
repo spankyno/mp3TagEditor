@@ -1,7 +1,6 @@
-import { ID3Writer } from 'browser-id3-writer';
-import jsmediatags from 'jsmediatags';
-import type { MP3FileItem, MP3Picture, MP3Tags, CleanTagsOptions } from '../types/mp3';
+import type { MP3FileItem, MP3Picture, MP3Tags, CleanTagsOptions, ID3Version } from '../types/mp3';
 import { sanitizeFilename } from './formatters';
+import { stripID3v2, writeID3v24 } from './id3v24';
 
 /**
  * El MIME de una carátula embebida es un dato no confiable: solo se admiten formatos de imagen conocidos.
@@ -152,15 +151,23 @@ export function createPictureFromBytes(data: Uint8Array, mimeType: string): Prom
  * Converts an uploaded image File into an MP3Picture suitable for ID3 APIC frame
  * Always normalizes to JPEG if not already a clean JPEG or PNG
  */
+/** Error de carátula con código estable (la interfaz lo traduce al idioma activo) */
+export class CoverError extends Error {
+  constructor(public code: 'format' | 'size' | 'resolution' | 'canvas' | 'convert' | 'load' | 'read') {
+    super(`Cover error: ${code}`);
+    this.name = 'CoverError';
+  }
+}
+
 const MAX_COVER_BYTES = 10 * 1024 * 1024; // 10 MB
 const MAX_COVER_PIXELS = 50_000_000; // evita canvas gigantes
 
 export async function convertImageFileToPicture(file: File): Promise<MP3Picture> {
   if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
-    throw new Error('Formato de imagen no admitido (usa JPG, PNG, WebP o GIF)');
+    throw new CoverError('format');
   }
   if (file.size > MAX_COVER_BYTES) {
-    throw new Error('La imagen supera el límite de 10 MB');
+    throw new CoverError('size');
   }
   // If already standard JPEG or PNG, read directly
   if (file.type === 'image/jpeg' || file.type === 'image/png') {
@@ -175,7 +182,7 @@ export async function convertImageFileToPicture(file: File): Promise<MP3Picture>
       const img = new Image();
       img.onload = () => {
         if (img.naturalWidth * img.naturalHeight > MAX_COVER_PIXELS) {
-          reject(new Error('La imagen tiene una resolución demasiado grande'));
+          reject(new CoverError('resolution'));
           return;
         }
         const canvas = document.createElement('canvas');
@@ -183,14 +190,14 @@ export async function convertImageFileToPicture(file: File): Promise<MP3Picture>
         canvas.height = img.naturalHeight;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          reject(new Error('Canvas 2D context not available'));
+          reject(new CoverError('canvas'));
           return;
         }
         ctx.drawImage(img, 0, 0);
         canvas.toBlob(
           async (blob) => {
             if (!blob) {
-              reject(new Error('No se pudo convertir la imagen'));
+              reject(new CoverError('convert'));
               return;
             }
             const buf = await blob.arrayBuffer();
@@ -201,10 +208,10 @@ export async function convertImageFileToPicture(file: File): Promise<MP3Picture>
           0.92
         );
       };
-      img.onerror = () => reject(new Error('Error al cargar la imagen seleccionada'));
+      img.onerror = () => reject(new CoverError('load'));
       img.src = e.target?.result as string;
     };
-    reader.onerror = () => reject(new Error('Error al leer el archivo de imagen'));
+    reader.onerror = () => reject(new CoverError('read'));
     reader.readAsDataURL(file);
   });
 }
@@ -219,6 +226,9 @@ export async function readMP3File(file: File): Promise<MP3FileItem> {
 
   // Read audio duration in parallel
   const durationPromise = getAudioDuration(file);
+
+  // jsmediatags se carga bajo demanda (solo cuando el usuario añade archivos)
+  const { default: jsmediatags } = await import('jsmediatags');
 
   // Read ID3 tags
   const tagsPromise = new Promise<MP3Tags>((resolve) => {
@@ -296,7 +306,17 @@ export async function readMP3File(file: File): Promise<MP3FileItem> {
 /**
  * Writes ID3v2.3 tags to an MP3 array buffer and produces a Blob
  */
-export async function writeID3Tags(originalBuffer: ArrayBuffer, tags: MP3Tags): Promise<Blob> {
+export async function writeID3Tags(
+  originalBuffer: ArrayBuffer,
+  tags: MP3Tags,
+  version: ID3Version = '2.3'
+): Promise<Blob> {
+  if (version === '2.4') {
+    return writeID3v24(originalBuffer, tags);
+  }
+
+  // ID3v2.3 → browser-id3-writer (se carga bajo demanda para aligerar la carga inicial)
+  const { ID3Writer } = await import('browser-id3-writer');
   const writer = new ID3Writer(originalBuffer);
 
   // Title
@@ -386,11 +406,10 @@ export async function writeID3Tags(originalBuffer: ArrayBuffer, tags: MP3Tags): 
  * Strips ID3 tag completely from MP3 array buffer
  */
 export function stripAllID3Tags(buffer: ArrayBuffer): Blob {
-  const writer = new ID3Writer(buffer);
-  writer.removeTag();
-  // After removeTag the internal buffer is the audio without ID3 frames.
-  // Prefer the public getBlob() API for consistency and type safety.
-  return writer.getBlob();
+  const audio = stripID3v2(buffer);
+  return new Blob([audio.buffer.slice(audio.byteOffset, audio.byteOffset + audio.byteLength) as ArrayBuffer], {
+    type: 'audio/mpeg',
+  });
 }
 
 /**

@@ -1,20 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import {
-  Save,
   RotateCcw,
   Download,
   Image as ImageIcon,
   Upload,
   Trash2,
-  Copy,
   Layers,
-  ChevronDown,
-  Sparkles,
-  Info,
 } from 'lucide-react';
 import type { MP3FileItem, MP3Picture, MP3Tags } from '../types/mp3';
 import { ID3_GENRES } from '../constants/genres';
-import { convertImageFileToPicture } from '../utils/id3';
+import { convertImageFileToPicture, CoverError } from '../utils/id3';
+import { useI18n } from '../i18n';
 
 interface TagEditorPanelProps {
   selectedItems: MP3FileItem[];
@@ -23,7 +19,81 @@ interface TagEditorPanelProps {
   onUpdatePicture: (picture: MP3Picture | null, applyToBatch: boolean) => void;
   onRevertTags: () => void;
   onDownloadActive: () => void;
+  onCoverError: (code: CoverError['code']) => void;
 }
+
+const INPUT_CLASS =
+  'w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
+
+const LABEL_CLASS = 'block text-[11px] font-medium text-slate-700 dark:text-slate-400 mb-1';
+
+const SECONDARY_BTN =
+  'px-2.5 py-1.5 text-[11px] font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors inline-flex items-center gap-1';
+
+interface TextFieldProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  mono?: boolean;
+  type?: 'text' | 'number';
+  maxLength?: number;
+  list?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  className?: string;
+  children?: React.ReactNode;
+}
+
+/** Campo de texto con <label> asociado (accesible para lectores de pantalla) */
+const TextField: React.FC<TextFieldProps> = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  mono,
+  type = 'text',
+  maxLength,
+  list,
+  inputMode,
+  className,
+  children,
+}) => {
+  const id = useId();
+  return (
+    <div className={className}>
+      <label htmlFor={id} className={LABEL_CLASS}>
+        {label}
+      </label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        maxLength={maxLength}
+        list={list}
+        inputMode={inputMode}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={`${INPUT_CLASS} ${mono ? 'font-mono' : ''}`}
+      />
+      {children}
+    </div>
+  );
+};
+
+const EMPTY_TAGS: MP3Tags = {
+  title: '',
+  artist: '',
+  album: '',
+  albumArtist: '',
+  year: '',
+  track: '',
+  genre: '',
+  comment: '',
+  composer: '',
+  bpm: '',
+  lyrics: '',
+  picture: null,
+};
 
 export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
   selectedItems,
@@ -32,29 +102,16 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
   onUpdatePicture,
   onRevertTags,
   onDownloadActive,
+  onCoverError,
 }) => {
+  const { t, tn } = useI18n();
   const isBatchMode = selectedItems.length > 1;
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const lyricsId = useId();
 
-  // Local form state
-  const [formData, setFormData] = useState<MP3Tags>({
-    title: '',
-    artist: '',
-    album: '',
-    albumArtist: '',
-    year: '',
-    track: '',
-    genre: '',
-    comment: '',
-    composer: '',
-    bpm: '',
-    lyrics: '',
-    picture: null,
-  });
-
+  const [formData, setFormData] = useState<MP3Tags>(EMPTY_TAGS);
   // Track which fields have been touched in batch mode
   const [touchedFields, setTouchedFields] = useState<Set<keyof MP3Tags>>(new Set());
-  const [showLyricsModal, setShowLyricsModal] = useState(false);
   const [isDragOverImage, setIsDragOverImage] = useState(false);
 
   // Sync form data with activeItem or batch consensus
@@ -63,24 +120,21 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
       setFormData({ ...activeItem.tags });
       setTouchedFields(new Set());
     } else if (isBatchMode && selectedItems.length > 0) {
-      // Find common values across selected items
       const first = selectedItems[0].tags;
+      const same = <K extends keyof MP3Tags>(key: K) =>
+        selectedItems.every((i) => i.tags[key] === first[key]) ? first[key] : '';
       const common: MP3Tags = {
-        title: selectedItems.every((i) => i.tags.title === first.title) ? first.title : '',
-        artist: selectedItems.every((i) => i.tags.artist === first.artist) ? first.artist : '',
-        album: selectedItems.every((i) => i.tags.album === first.album) ? first.album : '',
-        albumArtist: selectedItems.every((i) => i.tags.albumArtist === first.albumArtist)
-          ? first.albumArtist
-          : '',
-        year: selectedItems.every((i) => i.tags.year === first.year) ? first.year : '',
-        track: selectedItems.every((i) => i.tags.track === first.track) ? first.track : '',
-        genre: selectedItems.every((i) => i.tags.genre === first.genre) ? first.genre : '',
-        comment: selectedItems.every((i) => i.tags.comment === first.comment) ? first.comment : '',
-        composer: selectedItems.every((i) => i.tags.composer === first.composer)
-          ? first.composer
-          : '',
-        bpm: selectedItems.every((i) => i.tags.bpm === first.bpm) ? first.bpm : '',
-        lyrics: selectedItems.every((i) => i.tags.lyrics === first.lyrics) ? first.lyrics : '',
+        title: same('title') as string,
+        artist: same('artist') as string,
+        album: same('album') as string,
+        albumArtist: same('albumArtist') as string,
+        year: same('year') as string,
+        track: same('track') as string,
+        genre: same('genre') as string,
+        comment: same('comment') as string,
+        composer: same('composer') as string,
+        bpm: same('bpm') as string,
+        lyrics: same('lyrics') as string,
         picture: selectedItems.every((i) => i.tags.picture?.url === first.picture?.url)
           ? first.picture
           : null,
@@ -92,15 +146,16 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
 
   if (!activeItem && selectedItems.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center text-slate-400 dark:text-slate-500 h-full flex flex-col items-center justify-center">
-        <ImageIcon className="w-12 h-12 mb-3 opacity-30 text-indigo-500" />
-        <h4 className="font-semibold text-slate-700 dark:text-slate-300 text-sm mb-1">
-          Ninguna pista seleccionada
-        </h4>
-        <p className="text-xs max-w-xs">
-          Selecciona una o varias canciones de la lista para inspeccionar y editar sus etiquetas ID3.
-        </p>
-      </div>
+      <section
+        aria-label={t('tag.panelLabel')}
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 text-center text-slate-600 dark:text-slate-400 h-full flex flex-col items-center justify-center"
+      >
+        <ImageIcon aria-hidden="true" className="w-12 h-12 mb-3 opacity-40 text-indigo-500" />
+        <h2 className="font-semibold text-slate-800 dark:text-slate-300 text-sm mb-1">
+          {t('tag.noneTitle')}
+        </h2>
+        <p className="text-xs max-w-xs">{t('tag.noneText')}</p>
+      </section>
     );
   }
 
@@ -117,41 +172,33 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
     if (!isBatchMode) return;
     const updates: Partial<MP3Tags> = {};
     touchedFields.forEach((field) => {
-      updates[field] = formData[field] as any;
+      (updates as Record<string, unknown>)[field] = formData[field];
     });
     onUpdateTags(updates, true);
   };
 
-  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      try {
-        const pic = await convertImageFileToPicture(file);
-        setFormData((prev) => ({ ...prev, picture: pic }));
-        onUpdatePicture(pic, isBatchMode);
-      } catch (err) {
-        console.error('Error al procesar carátula:', err);
-      }
+  const processCover = async (file: File) => {
+    try {
+      const pic = await convertImageFileToPicture(file);
+      setFormData((prev) => ({ ...prev, picture: pic }));
+      onUpdatePicture(pic, isBatchMode);
+    } catch (err) {
+      onCoverError(err instanceof CoverError ? err.code : 'load');
     }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) await processCover(file);
   };
 
   const handleCoverDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragOverImage(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0];
-      if (file.type.startsWith('image/')) {
-        try {
-          const pic = await convertImageFileToPicture(file);
-          setFormData((prev) => ({ ...prev, picture: pic }));
-          onUpdatePicture(pic, isBatchMode);
-        } catch (err) {
-          console.error('Error al procesar carátula:', err);
-        }
-      }
-    }
+    const file = e.dataTransfer.files?.[0];
+    if (file) await processCover(file);
   };
 
   const handleRemoveCover = () => {
@@ -164,29 +211,35 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
       const a = document.createElement('a');
       a.href = formData.picture.url;
       const ext = formData.picture.mime.includes('png') ? 'png' : 'jpg';
-      a.download = `caratula-${formData.album || 'cover'}.${ext}`;
+      a.download = `cover-${(formData.album || 'cover').replace(/[^\w\-]+/g, '_')}.${ext}`;
       a.click();
     }
   };
 
+  const batchPlaceholder = (key: 'tag.keepIndividual' | 'tag.variousArtists' | 'tag.variousAlbums') =>
+    isBatchMode ? t(key) : undefined;
+
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs flex flex-col h-full overflow-hidden transition-colors">
+    <section
+      aria-label={t('tag.panelLabel')}
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs flex flex-col h-full overflow-hidden transition-colors"
+    >
       {/* Header Panel */}
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 bg-slate-50/70 dark:bg-slate-900/70">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {isBatchMode ? (
-            <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
-              <Layers className="w-4 h-4" />
-              <span className="font-semibold text-xs text-slate-900 dark:text-white">
-                Edición por lotes ({selectedItems.length} pistas)
-              </span>
+            <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-400">
+              <Layers aria-hidden="true" className="w-4 h-4" />
+              <h2 className="font-semibold text-xs text-slate-900 dark:text-white">
+                {tn('tag.batchTitle', selectedItems.length)}
+              </h2>
             </div>
           ) : (
             <div className="truncate">
-              <span className="font-semibold text-xs text-slate-900 dark:text-white block truncate">
-                {formData.title || activeItem?.currentFileName || 'Editor ID3'}
-              </span>
-              <span className="text-[11px] text-slate-400 truncate block">
+              <h2 className="font-semibold text-xs text-slate-900 dark:text-white block truncate">
+                {formData.title || activeItem?.currentFileName || t('tag.defaultTitle')}
+              </h2>
+              <span className="text-[11px] text-slate-600 dark:text-slate-400 truncate block">
                 {activeItem?.currentFileName}
               </span>
             </div>
@@ -198,9 +251,9 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
             type="button"
             onClick={handleApplyBatch}
             disabled={touchedFields.size === 0}
-            className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 rounded-lg shadow-2xs transition-all active:scale-95"
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-2xs transition-all active:scale-95"
           >
-            Aplicar a seleccionadas
+            {t('tag.applyBatch')}
           </button>
         )}
       </div>
@@ -218,70 +271,80 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
               }}
               onDragLeave={() => setIsDragOverImage(false)}
               onDrop={handleCoverDrop}
-              onClick={() => imageInputRef.current?.click()}
-              className={`relative w-28 h-28 rounded-xl bg-slate-200 dark:bg-slate-800 border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all group shrink-0 ${
+              className={`relative w-28 h-28 rounded-xl bg-slate-200 dark:bg-slate-800 border-2 border-dashed overflow-hidden transition-all group shrink-0 ${
                 isDragOverImage
                   ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40'
-                  : 'border-slate-300 dark:border-slate-700 hover:border-indigo-400'
+                  : 'border-slate-400 dark:border-slate-700 hover:border-indigo-400'
               }`}
             >
-              {formData.picture?.url ? (
-                <>
-                  <img
-                    src={formData.picture.url}
-                    alt="Album Cover"
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-1 text-center">
-                    <Upload className="w-5 h-5 mb-1" />
-                    <span className="text-[10px] font-medium leading-tight">Cambiar carátula</span>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center p-2 text-slate-400 group-hover:text-indigo-500">
-                  <ImageIcon className="w-6 h-6 mx-auto mb-1 opacity-60" />
-                  <span className="text-[10px] block leading-tight">Subir portada</span>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => imageInputRef.current?.click()}
+                aria-label={formData.picture ? t('tag.coverChange') : t('tag.coverUploadPlaceholder')}
+                className="absolute inset-0 w-full h-full flex flex-col items-center justify-center cursor-pointer"
+              >
+                {formData.picture?.url ? (
+                  <>
+                    <img
+                      src={formData.picture.url}
+                      alt={t('tag.coverAlt')}
+                      width={112}
+                      height={112}
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity flex flex-col items-center justify-center text-white p-1 text-center"
+                    >
+                      <Upload className="w-5 h-5 mb-1" />
+                      <span className="text-[10px] font-medium leading-tight">{t('tag.coverChange')}</span>
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-center p-2 text-slate-600 dark:text-slate-400 group-hover:text-indigo-600">
+                    <ImageIcon aria-hidden="true" className="w-6 h-6 mx-auto mb-1 opacity-70" />
+                    <span className="text-[10px] block leading-tight">{t('tag.coverUploadPlaceholder')}</span>
+                  </span>
+                )}
+              </button>
             </div>
 
             <input
               ref={imageInputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp"
+              accept="image/jpeg,image/png,image/webp,image/gif"
               onChange={handleCoverUpload}
               className="hidden"
+              tabIndex={-1}
+              aria-hidden="true"
             />
 
             {/* Cover Info & Action Buttons */}
             <div className="flex-1 flex flex-col justify-between self-stretch min-w-0">
               <div>
                 <span className="font-semibold text-slate-800 dark:text-slate-200 block text-xs mb-0.5">
-                  Carátula del Álbum (APIC)
+                  {t('tag.coverTitle')}
                 </span>
                 {formData.picture ? (
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 font-mono tabular-nums">
                     {formData.picture.width && formData.picture.height
                       ? `${formData.picture.width} × ${formData.picture.height} px`
-                      : 'Carátula cargada'}
+                      : t('tag.coverLoaded')}
                     {formData.picture.sizeKB ? ` · ${formData.picture.sizeKB} KB` : ''}
                   </p>
                 ) : (
-                  <p className="text-[11px] text-slate-400 italic">Sin carátula asignada</p>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 italic">{t('tag.coverNone')}</p>
                 )}
-                <span className="text-[10px] text-slate-400 block mt-1">
-                  Recomendado: 500×500 a 1000×1000 px (JPG/PNG).
+                <span className="text-[10px] text-slate-600 dark:text-slate-400 block mt-1">
+                  {t('tag.coverHint')}
                 </span>
               </div>
 
               <div className="flex flex-wrap items-center gap-1.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  className="px-2.5 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors inline-flex items-center gap-1"
-                >
-                  <Upload className="w-3 h-3" />
-                  <span>Subir</span>
+                <button type="button" onClick={() => imageInputRef.current?.click()} className={SECONDARY_BTN}>
+                  <Upload aria-hidden="true" className="w-3 h-3" />
+                  <span>{t('tag.coverUpload')}</span>
                 </button>
 
                 {formData.picture && (
@@ -289,18 +352,20 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
                     <button
                       type="button"
                       onClick={handleDownloadCover}
-                      className="px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-                      title="Descargar imagen de carátula"
+                      className={SECONDARY_BTN}
+                      title={t('tag.coverDownload')}
+                      aria-label={t('tag.coverDownload')}
                     >
-                      <Download className="w-3 h-3" />
+                      <Download aria-hidden="true" className="w-3 h-3" />
                     </button>
                     <button
                       type="button"
                       onClick={handleRemoveCover}
-                      className="px-2 py-1 text-[11px] font-medium text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
-                      title="Quitar carátula"
+                      className={`${SECONDARY_BTN} !text-rose-700 dark:!text-rose-400 hover:!bg-rose-50 dark:hover:!bg-rose-950/30`}
+                      title={t('tag.coverRemove')}
+                      aria-label={t('tag.coverRemove')}
                     >
-                      <Trash2 className="w-3 h-3" />
+                      <Trash2 aria-hidden="true" className="w-3 h-3" />
                     </button>
                   </>
                 )}
@@ -311,174 +376,114 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
 
         {/* Primary Tags Grid */}
         <div className="space-y-3">
-          {/* Título */}
-          <div>
-            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-              Título de la pista (TIT2)
-            </label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => handleFieldChange('title', e.target.value)}
-              placeholder={isBatchMode ? '< Mantener valores individuales >' : 'Ej: Midnight Drive'}
-              className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-            />
-          </div>
+          <TextField
+            label={t('tag.title')}
+            value={formData.title}
+            onChange={(v) => handleFieldChange('title', v)}
+            placeholder={isBatchMode ? t('tag.keepIndividual') : t('tag.titleExample')}
+          />
 
-          {/* Artista y Artista del Álbum */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Artista principal (TPE1)
-              </label>
-              <input
-                type="text"
-                value={formData.artist}
-                onChange={(e) => handleFieldChange('artist', e.target.value)}
-                placeholder={isBatchMode ? '< Varios artistas >' : 'Ej: Solar Echoes'}
-                className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Artista del Álbum (TPE2)
-              </label>
-              <input
-                type="text"
-                value={formData.albumArtist}
-                onChange={(e) => handleFieldChange('albumArtist', e.target.value)}
-                placeholder={isBatchMode ? '< Varios artistas >' : 'Ej: Various Artists'}
-                className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Álbum y Año */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Álbum (TALB)
-              </label>
-              <input
-                type="text"
-                value={formData.album}
-                onChange={(e) => handleFieldChange('album', e.target.value)}
-                placeholder={isBatchMode ? '< Varios álbumes >' : 'Ej: Neon Odyssey'}
-                className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Año (TYER)
-              </label>
-              <input
-                type="text"
-                maxLength={4}
-                value={formData.year}
-                onChange={(e) => handleFieldChange('year', e.target.value)}
-                placeholder="2026"
-                className="w-full px-3 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Pista y Género */}
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Pista (TRCK)
-              </label>
-              <input
-                type="text"
-                value={formData.track}
-                onChange={(e) => handleFieldChange('track', e.target.value)}
-                placeholder="01/10"
-                className="w-full px-3 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-            </div>
-
-            <div className="col-span-2">
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Género (TCON)
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  list="id3-genre-list"
-                  value={formData.genre}
-                  onChange={(e) => handleFieldChange('genre', e.target.value)}
-                  placeholder="Seleccionar o escribir..."
-                  className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                />
-                <datalist id="id3-genre-list">
-                  {ID3_GENRES.map((g) => (
-                    <option key={g} value={g} />
-                  ))}
-                </datalist>
-              </div>
-            </div>
-          </div>
-
-          {/* Compositor y BPM */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                Compositor (TCOM)
-              </label>
-              <input
-                type="text"
-                value={formData.composer}
-                onChange={(e) => handleFieldChange('composer', e.target.value)}
-                placeholder="Ej: Aitor Sánchez"
-                className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-            </div>
-            <div>
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-                BPM (TBPM)
-              </label>
-              <input
-                type="number"
-                value={formData.bpm}
-                onChange={(e) => handleFieldChange('bpm', e.target.value)}
-                placeholder="128"
-                className="w-full px-3 py-1.5 text-xs font-mono bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-              />
-            </div>
-          </div>
-
-          {/* Comentario */}
-          <div>
-            <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400 mb-1">
-              Comentario (COMM)
-            </label>
-            <input
-              type="text"
-              value={formData.comment}
-              onChange={(e) => handleFieldChange('comment', e.target.value)}
-              placeholder="Comentarios o notas de la versión..."
-              className="w-full px-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+            <TextField
+              label={t('tag.artist')}
+              value={formData.artist}
+              onChange={(v) => handleFieldChange('artist', v)}
+              placeholder={batchPlaceholder('tag.variousArtists') ?? t('tag.artistExample')}
+            />
+            <TextField
+              label={t('tag.albumArtist')}
+              value={formData.albumArtist}
+              onChange={(v) => handleFieldChange('albumArtist', v)}
+              placeholder={batchPlaceholder('tag.variousArtists') ?? t('tag.albumArtistExample')}
             />
           </div>
 
-          {/* Letra (Lyrics) */}
+          <div className="grid grid-cols-3 gap-3">
+            <TextField
+              className="col-span-2"
+              label={t('tag.album')}
+              value={formData.album}
+              onChange={(v) => handleFieldChange('album', v)}
+              placeholder={batchPlaceholder('tag.variousAlbums') ?? t('tag.albumExample')}
+            />
+            <TextField
+              label={t('tag.year')}
+              value={formData.year}
+              onChange={(v) => handleFieldChange('year', v)}
+              maxLength={4}
+              inputMode="numeric"
+              mono
+              placeholder="2026"
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <TextField
+              label={t('tag.track')}
+              value={formData.track}
+              onChange={(v) => handleFieldChange('track', v)}
+              mono
+              placeholder="01/10"
+            />
+            <TextField
+              className="col-span-2"
+              label={t('tag.genre')}
+              value={formData.genre}
+              onChange={(v) => handleFieldChange('genre', v)}
+              list="id3-genre-list"
+              placeholder={t('tag.genrePlaceholder')}
+            >
+              <datalist id="id3-genre-list">
+                {ID3_GENRES.map((g) => (
+                  <option key={g} value={g} />
+                ))}
+              </datalist>
+            </TextField>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <TextField
+              className="col-span-2"
+              label={t('tag.composer')}
+              value={formData.composer}
+              onChange={(v) => handleFieldChange('composer', v)}
+              placeholder={t('tag.composerExample')}
+            />
+            <TextField
+              label={t('tag.bpm')}
+              type="number"
+              value={formData.bpm}
+              onChange={(v) => handleFieldChange('bpm', v)}
+              mono
+              placeholder="128"
+            />
+          </div>
+
+          <TextField
+            label={t('tag.comment')}
+            value={formData.comment}
+            onChange={(v) => handleFieldChange('comment', v)}
+            placeholder={t('tag.commentPlaceholder')}
+          />
+
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="block text-[11px] font-medium text-slate-600 dark:text-slate-400">
-                Letra de la canción (USLT)
+              <label htmlFor={lyricsId} className="block text-[11px] font-medium text-slate-700 dark:text-slate-400">
+                {t('tag.lyrics')}
               </label>
               {formData.lyrics && (
-                <span className="text-[10px] text-slate-400 font-mono">
-                  {formData.lyrics.split('\n').length} líneas
+                <span className="text-[10px] text-slate-600 dark:text-slate-400 font-mono">
+                  {tn('tag.lines', formData.lyrics.split('\n').length)}
                 </span>
               )}
             </div>
             <textarea
+              id={lyricsId}
               rows={3}
               value={formData.lyrics}
               onChange={(e) => handleFieldChange('lyrics', e.target.value)}
-              placeholder="Introduce la letra de la canción aquí..."
-              className="w-full px-3 py-2 text-xs font-sans bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-y"
+              placeholder={t('tag.lyricsPlaceholder')}
+              className={`${INPUT_CLASS} py-2 font-sans resize-y`}
             />
           </div>
         </div>
@@ -489,11 +494,11 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
         <button
           type="button"
           onClick={onRevertTags}
-          className="px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors inline-flex items-center gap-1.5"
-          title="Revertir etiquetas originales"
+          className="px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-lg transition-colors inline-flex items-center gap-1.5"
+          title={t('tag.revertTitle')}
         >
-          <RotateCcw className="w-3.5 h-3.5" />
-          <span>Revertir</span>
+          <RotateCcw aria-hidden="true" className="w-3.5 h-3.5" />
+          <span>{t('tag.revert')}</span>
         </button>
 
         {!isBatchMode && activeItem && (
@@ -502,11 +507,11 @@ export const TagEditorPanel: React.FC<TagEditorPanelProps> = ({
             onClick={onDownloadActive}
             className="px-3.5 py-1.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-2xs transition-all active:scale-95 inline-flex items-center gap-1.5"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Descargar MP3</span>
+            <Download aria-hidden="true" className="w-3.5 h-3.5" />
+            <span>{t('tag.download')}</span>
           </button>
         )}
       </div>
-    </div>
+    </section>
   );
 };
